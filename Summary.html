@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Flaky Network — Submission Summary</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4f;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+    h2 {
+      font-size: 1.15rem;
+      margin: 2rem 0 0.75rem;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.35rem;
+    }
+    .subtitle { color: var(--muted); margin-bottom: 2rem; }
+    .hero {
+      background: linear-gradient(135deg, #1e3a5f 0%, var(--surface) 100%);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem 2rem;
+      margin-bottom: 2rem;
+    }
+    .hero .delay {
+      font-size: 3rem;
+      font-weight: 700;
+      color: var(--ok);
+      line-height: 1.1;
+    }
+    .hero .delay-label { color: var(--muted); font-size: 0.95rem; }
+    .hero p { margin-top: 1rem; max-width: 60ch; }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .badge-ok { background: #14532d; color: #86efac; }
+    .badge-warn { background: #78350f; color: #fcd34d; }
+    .badge-bad { background: #7f1d1d; color: #fca5a5; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      margin: 0.75rem 0;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    th { color: var(--muted); font-weight: 500; }
+    code, pre {
+      font-family: "JetBrains Mono", "Fira Code", monospace;
+      font-size: 0.85rem;
+    }
+    pre {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      margin: 0.75rem 0;
+    }
+    .diagram {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: monospace;
+      font-size: 0.78rem;
+      line-height: 1.45;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    ul { margin: 0.5rem 0 0.5rem 1.25rem; }
+    li { margin: 0.35rem 0; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+    .card h3 { font-size: 0.95rem; margin-bottom: 0.5rem; }
+    .stat { font-size: 1.5rem; font-weight: 700; }
+    footer {
+      margin-top: 3rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>The Flaky Network</h1>
+  <p class="subtitle">Real-time UDP playout over a hostile relay — submission summary</p>
+
+  <div class="hero">
+    <div class="delay-label">Recommended playout delay for grading</div>
+    <div class="delay">delay_ms = 85</div>
+    <p>
+      Graders use <strong>unseen</strong> network profiles. <strong>85&nbsp;ms</strong> is the lowest
+      delay that stayed <span class="badge badge-ok">VALID</span> on the harder practice profile
+      (5% loss, up to 80&nbsp;ms jitter). Do <em>not</em> submit 40&nbsp;ms unless you know the
+      network is mild — it fails ~50% of frames on profile&nbsp;B.
+    </p>
+  </div>
+
+  <h2>Score constraints</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Deadline misses</h3>
+      <div class="stat" style="color: var(--ok);">≤ 1%</div>
+      <p style="color: var(--muted); font-size: 0.85rem;">Frame must reach player before deadline</p>
+    </div>
+    <div class="card">
+      <h3>Bandwidth overhead</h3>
+      <div class="stat" style="color: var(--ok);">≤ 2.0×</div>
+      <p style="color: var(--muted); font-size: 0.85rem;">All relay bytes, both directions, incl. drops</p>
+    </div>
+    <div class="card">
+      <h3>Playout delay (score)</h3>
+      <div class="stat" style="color: var(--accent);">lower wins</div>
+      <p style="color: var(--muted); font-size: 0.85rem;">Only among valid runs</p>
+    </div>
+    <div class="card">
+      <h3>Our overhead (typical)</h3>
+      <div class="stat">~2.00×</div>
+      <p style="color: var(--muted); font-size: 0.85rem;">~479,655 B uplink / 240,000 B raw</p>
+    </div>
+  </div>
+
+  <h2>Architecture</h2>
+  <div class="diagram">harness source ──47010──► sender ──47001──► relay ──47002──► receiver ──47020──► harness player
+                              ▲                                  │
+                              └──────── 47004 ◄── relay ◄── 47003 ┘
+                                         (NACK feedback)</div>
+
+  <h2>Strategy</h2>
+  <ul>
+    <li><strong>Primary:</strong> immediate duplicate copies (~94% of frames) to survive loss without RTT</li>
+    <li><strong>Secondary:</strong> limited NACK (max 2 per seq) for frames without a duplicate</li>
+    <li><strong>Receiver:</strong> reorder buffer + <code>poll()</code> deadline timer (skip on miss)</li>
+    <li><strong>Dropped:</strong> end-of-block XOR FEC — too slow for low playout delay</li>
+  </ul>
+
+  <h2>Practice profile results</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Profile</th>
+        <th>delay_ms</th>
+        <th>Miss rate</th>
+        <th>Overhead</th>
+        <th>Result</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>A (mild: 2% loss, 10–40 ms)</td>
+        <td>40</td>
+        <td>0.0 – 0.7%</td>
+        <td>2.00×</td>
+        <td><span class="badge badge-ok">VALID</span></td>
+      </tr>
+      <tr>
+        <td>B (moderate: 5% loss, 20–80 ms)</td>
+        <td>40</td>
+        <td>~50%</td>
+        <td>2.00×</td>
+        <td><span class="badge badge-bad">INVALID</span></td>
+      </tr>
+      <tr>
+        <td>B</td>
+        <td>80</td>
+        <td>1.20%</td>
+        <td>2.00×</td>
+        <td><span class="badge badge-bad">INVALID</span></td>
+      </tr>
+      <tr>
+        <td>B</td>
+        <td><strong>85</strong></td>
+        <td>0.3 – 0.9%</td>
+        <td>2.00×</td>
+        <td><span class="badge badge-ok">VALID</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Wire format (student protocol)</h2>
+  <pre>PT_FRAME (1):  [1][seq:4 BE][payload:160]   165 bytes
+PT_NACK  (3):  [3][seq:4 BE]                  5 bytes</pre>
+
+  <h2>Build &amp; run</h2>
+  <pre>make
+python3 run.py --profile profiles/B.json --delay_ms 85</pre>
+
+  <h2>Files submitted</h2>
+  <table>
+    <thead><tr><th>File</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>sender.cpp</code></td><td>Duplicate send + NACK retransmit thread</td></tr>
+      <tr><td><code>receiver.cpp</code></td><td>Reorder, dedup, deadline timer, limited NACK</td></tr>
+      <tr><td><code>Makefile</code></td><td>Builds <code>./sender</code> and <code>./receiver</code></td></tr>
+      <tr><td><code>NOTES.md</code></td><td>Design rationale</td></tr>
+      <tr><td><code>RUNLOG.md</code></td><td>Test run history</td></tr>
+      <tr><td><code>Summary.html</code></td><td>This page</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Why 85 ms?</h2>
+  <p>
+    Minimum playout delay is roughly the network's <code>delay_max_ms</code> plus a small margin.
+    Profile B has <code>delay_max_ms = 80</code>; at 80 ms we still saw 1.2% misses (over the 1% cap).
+    At 85 ms, multiple seeds passed with 0.3–0.9% misses. Profile A works at 40 ms, but graders
+    use unseen profiles — submitting 40 ms risks instant failure on a harder network.
+  </p>
+
+  <footer>
+    The Flaky Network assignment · Linux · C++17 · UDP on 127.0.0.1
+  </footer>
+
+</body>
+</html>
