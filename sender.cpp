@@ -1,30 +1,13 @@
-/* SENDER (C++) — block-XOR FEC + NACK retransmit fallback.
+/* SENDER (C++) — budgeted immediate duplicate + limited NACK retransmit.
  *
- * Wire protocol sender<->receiver (our own design, first byte = type):
- *   PT_FRAME  (1): [1][seq:4 BE][payload:160]                = 165 B
- *       One media frame. Sent immediately on receipt from the harness,
- *       and again (unchanged) if a NACK asks for it.
- *   PT_PARITY (2): [2][block_start:4 BE][block_len:1][xor:160] = 166 B
- *       XOR of `block_len` consecutive frame payloads starting at
- *       block_start. Lets the receiver reconstruct exactly ONE missing
- *       frame per block without a round trip.
- *   PT_NACK   (3), receiver -> sender via 47003 -> relay -> 47004:
- *       [3][seq:4 BE] = 5 B. "I'm still missing this frame and there's
- *       time left before its deadline — please resend."
+ * Wire format (first byte = type):
+ *   PT_FRAME (1): [1][seq:4 BE][payload:160]
+ *   PT_NACK  (3): [3][seq:4 BE]   receiver -> 47003
  *
- * Ports (all 127.0.0.1):
- *   bind 47010  <- harness source (seq:4 BE + 160B payload, every 20ms)
- *   send 47001  -> relay uplink (our protocol above)
- *   bind 47004  <- feedback from receiver, via relay (NACKs)
- *
- * Tune BLOCK_LEN: smaller = faster recovery, more overhead.
- *   BLOCK_LEN=5 -> ~1.24x overhead, worst-case extra recovery latency
- *                  ~ BLOCK_LEN*20ms if the lost frame was first in block.
- *
- * build: g++ -O2 -Wall -std=c++17 -pthread -o sender sender.cpp
+ * At 2% loss and 40 ms playout delay, end-of-block FEC and NACK RTTs are too
+ * slow. We spend the 2x bandwidth cap on ~94% immediate second copies.
  */
 #include <arpa/inet.h>
-#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -36,13 +19,14 @@
 namespace {
 
 constexpr int PAYLOAD_BYTES = 160;
-constexpr int RING_SIZE = 2048;      // ~40s of history at 20ms/frame
-constexpr uint32_t BLOCK_LEN = 5;    // frames per FEC parity group — tune me
+constexpr int RING_SIZE = 2048;
+constexpr int DUP_PERIOD = 1500;
+constexpr int DUP_QUOTA = 1407;   // ~1.998x uplink — leaves room for NACK retransmits
 
-enum PktType : uint8_t { PT_FRAME = 1, PT_PARITY = 2, PT_NACK = 3 };
+enum PktType : uint8_t { PT_FRAME = 1, PT_NACK = 3 };
 
 struct RingEntry {
-    uint32_t seq = 0xFFFFFFFFu;      // sentinel = empty slot
+    uint32_t seq = 0xFFFFFFFFu;
     unsigned char payload[PAYLOAD_BYTES];
 };
 
@@ -52,24 +36,16 @@ std::mutex g_ring_mtx;
 int g_out_fd = -1;
 sockaddr_in g_relay_addr{};
 
+bool send_duplicate(uint32_t seq) {
+    return (seq % DUP_PERIOD) < static_cast<uint32_t>(DUP_QUOTA);
+}
+
 void send_frame(uint32_t seq, const unsigned char *payload) {
     unsigned char buf[1 + 4 + PAYLOAD_BYTES];
     buf[0] = PT_FRAME;
     uint32_t seq_be = htonl(seq);
     memcpy(buf + 1, &seq_be, 4);
     memcpy(buf + 5, payload, PAYLOAD_BYTES);
-    sendto(g_out_fd, buf, sizeof buf, 0,
-           reinterpret_cast<sockaddr *>(&g_relay_addr), sizeof g_relay_addr);
-}
-
-void send_parity(uint32_t block_start, uint8_t block_len,
-                  const unsigned char *xor_payload) {
-    unsigned char buf[1 + 4 + 1 + PAYLOAD_BYTES];
-    buf[0] = PT_PARITY;
-    uint32_t bs_be = htonl(block_start);
-    memcpy(buf + 1, &bs_be, 4);
-    buf[5] = block_len;
-    memcpy(buf + 6, xor_payload, PAYLOAD_BYTES);
     sendto(g_out_fd, buf, sizeof buf, 0,
            reinterpret_cast<sockaddr *>(&g_relay_addr), sizeof g_relay_addr);
 }
@@ -91,8 +67,6 @@ bool lookup_frame(uint32_t seq, unsigned char *out) {
     return false;
 }
 
-// Listens for NACKs from the receiver (via the relay) and resends the
-// exact frame requested, if we still have it.
 void feedback_loop() {
     int fb_fd = socket(AF_INET, SOCK_DGRAM, 0);
     sockaddr_in fb_addr{};
@@ -136,11 +110,6 @@ int main() {
     std::thread fb_thread(feedback_loop);
     fb_thread.detach();
 
-    unsigned char block_xor[PAYLOAD_BYTES];
-    bool block_open = false;
-    uint32_t block_start = 0;
-    uint8_t block_count = 0;
-
     unsigned char buf[2048];
     for (;;) {
         ssize_t n = recvfrom(in_fd, buf, sizeof buf, 0, nullptr, nullptr);
@@ -152,20 +121,8 @@ int main() {
         const unsigned char *payload = buf + 4;
 
         store_frame(seq, payload);
-        send_frame(seq, payload);  // immediate, lowest-latency copy
-
-        if (!block_open) {
-            block_open = true;
-            block_start = seq;
-            block_count = 0;
-            memset(block_xor, 0, PAYLOAD_BYTES);
-        }
-        for (int i = 0; i < PAYLOAD_BYTES; i++) block_xor[i] ^= payload[i];
-        block_count++;
-        if (block_count >= BLOCK_LEN) {
-            send_parity(block_start, block_count, block_xor);
-            block_open = false;
-        }
+        send_frame(seq, payload);
+        if (send_duplicate(seq)) send_frame(seq, payload);
     }
     return 0;
 }
